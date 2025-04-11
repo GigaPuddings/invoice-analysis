@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Invoice Tool",
+  "version": "0.1.0",
+  "identifier": "com.invoice-analysis.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "发票解析工具",
+        "width": 1100,
+        "height": 750,
+        "minWidth": 1100,
+        "minHeight": 750,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "copyright": "Copyright © 2025 invoice tool",
+    "category": "Utility",
+    "shortDescription": "解析发票内容工具",
+    "longDescription": "使用Tauri、React和Rust构建的一款效率工具",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": {
+        "language": "zh-CN"
+      },
+      "nsis": {
+        "languages": [
+          "SimpChinese"
+        ],
+        "installerIcon": "icons/icon.ico"
+      }
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

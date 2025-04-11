@@ -1,0 +1,45 @@
+[package]
+name = "invoice-analysis"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "invoice_analysis_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 添加PDF处理依赖
+pdf-extract = "0.9.0"
+# 添加图像处理依赖
+image = "0.24"
+# 添加正则表达式支持
+regex = "1.7"
+# Excel文件处理
+rust_xlsxwriter = "0.85.0"
+# 多线程支持
+rayon = "1.7"
+# 用于日志记录
+log = "0.4"
+env_logger = "0.10"
+# 打开文件
+tauri-plugin-dialog = "2"
+dirs = "5.0"
+# 用户通知
+tauri-plugin-notification = "2"
+
+

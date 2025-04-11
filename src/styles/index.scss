@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+.ant-card .ant-card-head {
+    min-height: 42px;
+}
+.ant-typography {
+    margin-bottom: 0 !important;
+}
+
+.ant-table-expanded-row {
+  .ant-table-row {
+    background: #fafafa;
+  }
+}
+
+/* 为PDF预览模态框添加拖拽样式 */
+.pdf-preview-draggable {
+  position: fixed !important;
+  z-index: 1050;
+}
+
+.draggable-modal-container .ant-modal {
+  margin: 0;
+  padding: 0;
+  top: 0 !important;
+  position: relative !important;
+}
+
+.pdf-preview-modal .ant-modal-content {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+}
+
+.pdf-preview-modal .ant-modal-header {
+  cursor: move;
+  user-select: none;
+  border-radius: 8px 8px 0 0;
+}
+
+/* 确保拖拽区域正常工作 */
+.ant-modal-wrap.pdf-preview-modal-root {
+  overflow: hidden;
+}
+
+.ant-modal-wrap {
+  pointer-events: none;
+}
+
+
