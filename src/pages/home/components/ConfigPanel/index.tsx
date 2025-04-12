@@ -109,7 +109,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   // 导出字段选择状态
   const [exportFields, setExportFields] = useState<string[]>([
     "序号", "文件名", "状态", "发票代码", "发票号码", "开票日期", 
-    "购买方名称", "购买方税号", "购买方地址电话", "购买方开户行账号", 
+    "购买方名称", "购买方税号", "购买方地址、电话", "购买方开户行账号", 
     "销售方名称", "销售方税号", "销售方地址电话", "销售方开户行账号", 
     "收款人", "复核人", "开票人",
     "金额", "税额", "价税合计", "备注", "重复信息"
@@ -118,7 +118,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   // 可用的导出字段列表
   const availableExportFields = [
     "序号", "文件名", "状态", "发票代码", "发票号码", "开票日期", 
-    "购买方名称", "购买方税号", "购买方地址电话", "购买方开户行账号", 
+    "购买方名称", "购买方税号", "购买方地址、电话", "购买方开户行账号", 
     "销售方名称", "销售方税号", "销售方地址电话", "销售方开户行账号", 
     "收款人", "复核人", "开票人",
     "金额", "税额", "价税合计", "备注", "重复信息"
@@ -268,7 +268,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
           // 当进度变化时更新UI
           if (displayProgress !== progress && displayProgress > 0) {
-            console.log("更新进度:", displayProgress);
+            // console.log("更新进度:", displayProgress);
             setProgress(displayProgress);
           }
 
@@ -896,7 +896,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         return;
       }
       
-      console.log("找到匹配的PDF文件:", matchedFilePath);
+      // console.log("找到匹配的PDF文件:", matchedFilePath);
       
       // 设置文件路径并显示预览
       setSelectedPdfFile(matchedFilePath);
@@ -1119,7 +1119,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       >
         <div className="flex flex-wrap justify-between">
           <Card
-            className="mb-2 bg-gradient-to-br from-blue-50 to-blue-100 border-none w-[32%]"
+            className="mb-2 bg-gradient-to-br from-blue-50 to-blue-100 border-none w-[32%] shadow-sm hover:shadow-md transition-shadow duration-300"
             size="small"
           >
             <Statistic
@@ -1131,7 +1131,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             />
           </Card>
           <Card
-            className="mb-2 bg-gradient-to-br from-green-50 to-green-100 border-none w-[32%]"
+            className="mb-2 bg-gradient-to-br from-green-50 to-green-100 border-none w-[32%] shadow-sm hover:shadow-md transition-shadow duration-300"
             size="small"
           >
             <Statistic
@@ -1143,7 +1143,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             />
           </Card>
           <Card
-            className="mb-2 bg-gradient-to-br from-purple-50 to-purple-100 border-none w-[32%]"
+            className="mb-2 bg-gradient-to-br from-purple-50 to-purple-100 border-none w-[32%] shadow-sm hover:shadow-md transition-shadow duration-300"
             size="small"
           >
             <Statistic
@@ -1153,7 +1153,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             />
           </Card>
           <Card
-            className="mb-2 bg-gradient-to-br from-yellow-50 to-yellow-100 border-none w-[32%]"
+            className="mb-2 bg-gradient-to-br from-yellow-50 to-yellow-100 border-none w-[32%] shadow-sm hover:shadow-md transition-shadow duration-300"
             size="small"
           >
             <Statistic
@@ -1163,7 +1163,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             />
           </Card>
           <Card
-            className="mb-2 bg-gradient-to-br from-emerald-50 to-emerald-100 border-none w-[32%]"
+            className="mb-2 bg-gradient-to-br from-emerald-50 to-emerald-100 border-none w-[32%] shadow-sm hover:shadow-md transition-shadow duration-300"
             size="small"
           >
             <Statistic
@@ -1173,7 +1173,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             />
           </Card>
           <Card
-            className="mb-2 bg-gradient-to-br from-red-50 to-red-100 border-none w-[32%]"
+            className="mb-2 bg-gradient-to-br from-red-50 to-red-100 border-none w-[32%] shadow-sm hover:shadow-md transition-shadow duration-300"
             size="small"
           >
             <Statistic
