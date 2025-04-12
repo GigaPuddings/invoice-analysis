@@ -54,6 +54,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
     date: string;
     totalAmount: string;
     totalTax: string;
+    totalAmountTax: string;
     remark: string;
     status: InvoiceStatus;
     duplicateInfo: string;
@@ -81,7 +82,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   // 统计结果状态对象（确保与 pdfService 中定义的完全一致）
   interface StatsType {
     totalAmount: number;
-    totalTax: number;
+    totalAmountTax: number;
     invoiceCount: number;
     duplicateCount: number;
     successCount: number;
@@ -92,7 +93,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   // 统计结果状态
   const [stats, setStats] = useState<StatsType>({
     totalAmount: 0,
-    totalTax: 0,
+    totalAmountTax: 0,
     invoiceCount: 0,
     duplicateCount: 0,
     successCount: 0,
@@ -226,14 +227,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
           // 更新状态数据
           setStats({
             totalAmount: currentStats.totalAmount,
-            totalTax: currentStats.totalTax,
+            totalAmountTax: currentStats.totalAmountTax,
             invoiceCount: currentStats.invoiceCount,
             duplicateCount: currentStats.duplicateCount,
             successCount: currentStats.successCount,
             failCount: currentStats.failCount,
             currentProgress: currentStats.currentProgress,
           });
-          
           // 更新发票列表
           setInvoices(
             currentInvoices.map((inv) => ({
@@ -245,7 +245,8 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
               number: inv.number,
               date: inv.date,
               totalAmount: inv.total_amount,
-              totalTax:inv.total_tax,
+              totalTax: inv.total_tax,
+              totalAmountTax: inv.total_amount_tax,
               remark: inv.remark,
               status: inv.status as InvoiceStatus,
               duplicateInfo: inv.duplicate_info,
@@ -345,7 +346,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       const finalStats = pdfService.getStats();
       setStats({
         totalAmount: finalStats.totalAmount,
-        totalTax: finalStats.totalTax,
+        totalAmountTax: finalStats.totalAmountTax,
         invoiceCount: finalStats.invoiceCount,
         duplicateCount: finalStats.duplicateCount,
         successCount: finalStats.successCount,
@@ -489,7 +490,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       setInvoices([]);
       setStats({
         totalAmount: 0,
-        totalTax: 0,
+        totalAmountTax: 0,
         invoiceCount: 0,
         duplicateCount: 0,
         successCount: 0,
@@ -560,9 +561,17 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       ellipsis: true,
     },
     {
-      title: "税价合计",
+      title: "税额",
       dataIndex: "totalTax",
       key: "totalTax",
+      width: 120,
+      align: "center",
+      ellipsis: true,
+    },
+    {
+      title: "价税合计",
+      dataIndex: "totalAmountTax",
+      key: "totalAmountTax",
       width: 120,
       align: "center",
       ellipsis: true,
@@ -800,7 +809,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
           >
             <Statistic
               title={<span className="text-xs">总价税合计</span>}
-              value={stats.totalTax}
+              value={stats.totalAmountTax}
               precision={2}
               valueStyle={{ color: "#0854a0", fontSize: "16px" }}
               prefix="¥"

@@ -46,6 +46,7 @@ export interface Invoice {
   items: InvoiceItem[];
   total_amount: string;
   total_tax: string;
+  total_amount_tax: string;
   payee: string;
   reviewer: string;
   drawer: string;
@@ -190,8 +191,9 @@ function createEmptyInvoice(
       bank_account: "",
     },
     items: [],
-    total_amount: "0.00",
-    total_tax: "0.00",
+    total_amount: "0.00", // 合计金额
+    total_tax: "0.00", // 合计税额
+    total_amount_tax: "0.00", // 价税合计
     payee: "",
     reviewer: "",
     drawer: "",

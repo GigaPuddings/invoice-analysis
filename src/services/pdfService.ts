@@ -4,7 +4,7 @@ import { parsePdfFile, Invoice, ProgressCallback } from "../utils/pdfParser";
 // 处理状态接口
 export interface ProcessingStats {
   totalAmount: number;
-  totalTax: number;
+  totalAmountTax: number;
   invoiceCount: number;
   duplicateCount: number;
   successCount: number;
@@ -21,7 +21,7 @@ class PdfService {
   // 处理状态
   private stats: ProcessingStats = {
     totalAmount: 0,
-    totalTax: 0,
+    totalAmountTax: 0,
     invoiceCount: 0,
     duplicateCount: 0,
     successCount: 0,
@@ -63,7 +63,7 @@ class PdfService {
       let duplicateCount = 0;
       let failCount = 0;
       let totalAmount = 0;
-      let totalTax = 0;
+      let totalAmountTax = 0;
 
       for (const file of files) {
         // 检查是否应该停止处理
@@ -153,9 +153,9 @@ class PdfService {
               
               // 解析金额和税额，用于统计
               const amount = parseFloat(invoice.total_amount) || 0;
-              const tax = parseFloat(invoice.total_tax) || 0;
+              const tax = parseFloat(invoice.total_amount_tax) || 0;
               totalAmount += amount;
-              totalTax += tax;
+              totalAmountTax += tax;
             }
 
             this.invoices.push(invoice);
@@ -167,7 +167,7 @@ class PdfService {
               duplicateCount,
               failCount,
               totalAmount,
-              totalTax,
+              totalAmountTax,
               this.invoices.length
             );
           }
@@ -212,6 +212,7 @@ class PdfService {
             ],
             total_amount: "0.00",
             total_tax: "0.00",
+            total_amount_tax: "0.00",
             payee: "",
             reviewer: "",
             drawer: "",
@@ -228,7 +229,7 @@ class PdfService {
             duplicateCount,
             failCount,
             totalAmount,
-            totalTax,
+            totalAmountTax,
             this.invoices.length
           );
         }
@@ -327,7 +328,7 @@ class PdfService {
   private resetStats(): void {
     this.stats = {
       totalAmount: 0,
-      totalTax: 0,
+      totalAmountTax: 0,
       invoiceCount: 0,
       duplicateCount: 0,
       successCount: 0,
@@ -344,12 +345,12 @@ class PdfService {
     duplicateCount: number,
     failCount: number,
     totalAmount: number,
-    totalTax: number,
+    totalAmountTax: number,
     invoiceCount: number
   ): void {
     this.stats = {
       totalAmount: totalAmount,
-      totalTax: totalTax,
+      totalAmountTax: totalAmountTax,
       invoiceCount: invoiceCount,
       duplicateCount: duplicateCount,
       successCount: successCount,

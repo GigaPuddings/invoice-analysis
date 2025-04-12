@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 
+.ant-tag {
+  margin-inline-end: 0 !important;
+}
 
 .ant-card .ant-card-head {
     min-height: 42px;

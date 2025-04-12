@@ -43,6 +43,7 @@ pub struct Invoice {
     items: Vec<InvoiceItem>,
     total_amount: String,
     total_tax: String,
+    total_amount_tax: String,
     payee: String,
     reviewer: String,
     drawer: String,
@@ -198,6 +199,7 @@ fn create_empty_invoice(
         items: Vec::new(),
         total_amount: "0.00".to_string(),
         total_tax: "0.00".to_string(),
+        total_amount_tax: "0.00".to_string(),
         payee: "".to_string(),
         reviewer: "".to_string(),
         drawer: "".to_string(),
@@ -540,8 +542,8 @@ fn extract_invoice_items(text_items: &[TextItem], invoice: &mut Invoice) {
                 result.name = value.clone();
             }
             
-            // 防止索引越界
             if row.len() > 5 && (index == row.len() - 5 || index == row.len() - 4) {
+                // 数量，只有当还没设置时才赋值
                 let is_quantity_format = regex::Regex::new(r"^\d+$").unwrap().is_match(value);
                 if is_quantity_format && !flag_map.contains_key(&item_ptr) {
                     flag_map.insert(item_ptr, 1);
@@ -556,23 +558,24 @@ fn extract_invoice_items(text_items: &[TextItem], invoice: &mut Invoice) {
                 }
             }
             
-            // 防止索引越界
+            
             if row.len() > 3 && index == row.len() - 3 {
                 let is_amount_format = regex::Regex::new(r"^[¥￥]?-?[\d.]+$").unwrap().is_match(value);
                 if is_amount_format {
+                    // 金额
                     result.amount = value.clone();
                 }
             }
             
-            // 防止索引越界
             if row.len() > 2 && index == row.len() - 2 && value.contains('%') {
+                // 税率
                 result.tax_rate = value.clone();
             }
             
-            // 防止索引越界
             if row.len() > 1 && index == row.len() - 1 {
                 let is_tax_format = regex::Regex::new(r"^[¥￥]?-?[\d.]+$").unwrap().is_match(value);
                 if is_tax_format {
+                    // 税额
                     result.tax = value.clone();
                 }
             }
@@ -604,15 +607,17 @@ fn extract_total_amount_and_tax(text_items: &[TextItem], invoice: &mut Invoice) 
     
     let candidate_item = candidate_item.unwrap();
     
+    // 提取同一行中金额
     let same_line_items: Vec<&TextItem> = text_items.iter()
         .filter(|t| (t.y - candidate_item.y).abs() < 5.0 && t.x > candidate_item.x)
         .collect();
     
+    // 排序
     let mut sorted_items = same_line_items.clone();
     sorted_items.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
     
     let mut values: Vec<String> = Vec::new();
-    
+        
     let mut i = 0;
     while i < sorted_items.len() {
         let text = &sorted_items[i].text;
@@ -635,12 +640,17 @@ fn extract_total_amount_and_tax(text_items: &[TextItem], invoice: &mut Invoice) 
     }
     
     if !values.is_empty() {
+        // 合计金额
         invoice.total_amount = values[0].clone();
+        // 合计税额
+        if values.len() > 1 {
+            invoice.total_tax = values[1].clone();
+        }
     }
     
     // 提取合计税价
     let tax_regex = regex::Regex::new(r"[（(]?小写[)）]?").unwrap();
-    invoice.total_tax = extract_nearby_text(text_items, &tax_regex, "right", 100.0)
+    invoice.total_amount_tax = extract_nearby_text(text_items, &tax_regex, "right", 100.0)
         .replace(|c| c == '¥' || c == '￥', "");
 }
 

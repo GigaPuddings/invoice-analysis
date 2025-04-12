@@ -18,6 +18,7 @@
     "antd": "^5.24.6",
     "framer-motion": "^12.6.2",
     "pdfjs-dist": "^5.1.91",
+    "re-resizable": "^6.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-draggable": "^4.4.6",
