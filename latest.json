@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "notes": "本地测试发布",
+  "pub_date": "2025-04-12T15:29:47.692Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://github.com/default-owner/invoice-analysis/releases/download/0.0.1/invoice-analysis_0.0.1_x64-setup.exe",
+      "signature": "本地测试模式：使用模拟签名"
+    }
+  }
+}
