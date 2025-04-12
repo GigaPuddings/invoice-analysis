@@ -312,7 +312,7 @@ fn extract_party_info(
         if item.y > header_y && item.text == "息" {
             return Some(item);
         }
-        if item.y > header_y && (item.text == "方" || item.text == "⽅") && result.is_none() {
+        if item.y > header_y && (item.text == "方" || item.text == "⽅") && (item.y - header_y).abs() < 50.0 && result.is_none() {
             return Some(item);
         }
         result
@@ -322,7 +322,6 @@ fn extract_party_info(
     }
     
     let footer_item = footer_item.unwrap();
-    
     // 区域坐标偏移量
     let offset_x_left = if invoice.invoice_type == "普通发票" { 8.0 } else { 15.0 };
     let offset_x_right = if invoice.invoice_type == "普通发票" { 250.0 } else { 300.0 };
@@ -337,9 +336,9 @@ fn extract_party_info(
         (header_x as f64).floor() + offset_x_right,
         (header_y as f64).floor() - offset_y,
     );
-    let area_left_bottom = (
-        (footer_item.x as f64).floor() + offset_x_left,
-        (footer_item.y as f64).floor() + offset_y,
+    let area_right_bottom = (
+      (footer_item.x as f64).floor() + offset_x_right,
+      (footer_item.y as f64).floor() + offset_y,
     );
     
     // 查找区域内的所有文本项
@@ -347,9 +346,10 @@ fn extract_party_info(
         item.x >= area_left_top.0 &&
         item.x <= area_right_top.0 &&
         item.y >= area_left_top.1 &&
-        item.y <= area_left_bottom.1 &&
+        item.y <= area_right_bottom.1 &&
         item.page_index == footer_item.page_index
     }).collect();
+
     // 获取特定字段的值
     let get_field_value = |label_pattern: &regex::Regex| -> String {
         let label_item = area_items.iter().find(|item| label_pattern.is_match(&item.text));
@@ -365,7 +365,7 @@ fn extract_party_info(
         
         let mut result = String::new();
         for item in &area_items {
-            if item.x + item.width > label_right && (item.y - label_y).abs() <= 2.0 && !item.text.contains(':') && !item.text.contains('：') {
+            if item.x + item.width > label_right && (item.y - label_y).abs() <= 6.0 && !item.text.contains(':') && !item.text.contains('：') {
                 result.push_str(&item.text);
             }
         }
