@@ -20,6 +20,81 @@
   }
 }
 
+/* 修复表格固定列hover样式问题 */
+.ant-table-tbody > tr.cursor-pointer:hover > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.cursor-pointer:hover > td.ant-table-cell-fix-right {
+  background: inherit !important;
+}
+
+/* 去除表格选中行的默认蓝色背景 */
+.ant-table-tbody > tr.ant-table-row-selected > td {
+  background: inherit !important;
+  border-color: inherit !important;
+}
+
+/* 去除选中行的蓝色hover效果 */
+.ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background: inherit !important;
+}
+
+
+/* 针对当前选中的行添加固定列样式 */
+/* 红色背景(重复发票) */
+.ant-table-tbody > tr.bg-red-200 > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.bg-red-200 > td.ant-table-cell-fix-right {
+  background-color: rgb(254 202 202) !important; /* bg-red-200 */
+}
+
+/* 绿色背景(正常发票) */
+.ant-table-tbody > tr.bg-green-200 > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.bg-green-200 > td.ant-table-cell-fix-right {
+  background-color: rgb(187 247 208) !important; /* bg-green-200 */
+}
+
+/* 蓝色背景(其他状态) */
+.ant-table-tbody > tr.bg-blue-200 > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.bg-blue-200 > td.ant-table-cell-fix-right {
+  background-color: rgb(191 219 254) !important; /* bg-blue-200 */
+}
+
+/* 针对勾选的行添加固定列样式 */
+/* 红色背景(重复发票) */
+.ant-table-tbody > tr.bg-red-100 > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.bg-red-100 > td.ant-table-cell-fix-right {
+  background-color: rgb(254 226 226) !important;
+}
+
+/* 绿色背景(正常发票) */
+.ant-table-tbody > tr.bg-green-100 > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.bg-green-100 > td.ant-table-cell-fix-right {
+  background-color: rgb(220 252 231) !important;
+}
+
+/* 蓝色背景(其他状态) */
+.ant-table-tbody > tr.bg-blue-100 > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.bg-blue-100 > td.ant-table-cell-fix-right {
+  background-color: rgb(219 234 254) !important;
+}
+
+/* 针对不同状态应用特定hover背景色 */
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-red-50:hover > td,
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-red-50:hover > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-red-50:hover > td.ant-table-cell-fix-right {
+  background-color: rgb(254 242 242) !important;
+}
+
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-green-50:hover > td,
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-green-50:hover > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-green-50:hover > td.ant-table-cell-fix-right {
+  background-color: rgb(240 253 244) !important;
+}
+
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-gray-50:hover > td,
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-gray-50:hover > td.ant-table-cell-fix-left,
+.ant-table-tbody > tr.cursor-pointer.hover\:bg-gray-50:hover > td.ant-table-cell-fix-right {
+  background-color: rgb(249 250 251) !important;
+}
+
 /* 为PDF预览模态框添加拖拽样式 */
 .pdf-preview-draggable {
   position: fixed !important;

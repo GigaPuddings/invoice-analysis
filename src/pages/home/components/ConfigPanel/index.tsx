@@ -12,22 +12,27 @@ import {
   Tag,
   Empty,
   Tooltip,
+  Modal,
+  Checkbox,
+  Radio,
 } from "antd";
 import {
-  FileSearchOutlined,
   UploadOutlined,
+  FileSearchOutlined,
   ExportOutlined,
-  DeleteOutlined,
   FilePdfOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
-import { invoke } from "@tauri-apps/api/core";
-import React, { useState, useRef, useEffect } from "react";
-import { InvoiceDetail } from "@/pages/home";
-import { pdfService } from "@/services/pdfService";
+import React, { useState, useEffect, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { checkPdfJsEnvironment } from "@/utils/pdfjs-checker";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
+import type { SorterResult as AntdSorterResult, TableCurrentDataSource } from "antd/es/table/interface";
+import type { FilterValue } from "antd/es/table/interface";
 import PdfPreview from "@/components/PdfPreview";
+import { pdfService } from "@/services/pdfService";
+import { InvoiceDetail } from "../..";
+import { invoke } from "@tauri-apps/api/core";
 
 const { Title, Text } = Typography;
 
@@ -39,6 +44,7 @@ interface ConfigPanelProps {
 }
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({
+  selectedInvoice,
   setSelectedInvoice,
 }) => {
   // 发票状态类型
@@ -58,6 +64,11 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
     remark: string;
     status: InvoiceStatus;
     duplicateInfo: string;
+    type: string;
+    invoice_type?: string;
+    payee?: string;
+    reviewer?: string;
+    drawer?: string;
     details?: Array<{
       name: string;
       quantity: string;
@@ -67,7 +78,20 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       tax: string;
     }>;
   }
+
+  // 表格排序类型定义
+  // interface SorterResult<T> {
+  //   column?: { 
+  //     dataIndex: string;
+  //     key: string;
+  //   };
+  //   order?: 'ascend' | 'descend' | null;
+  //   field?: string;
+  //   columnKey?: string;
+  // }
+
   const [outputPath, setOutputPath] = useState<string>("");
+  const [outputFilename, setOutputFilename] = useState<string>("发票数据汇总");
   const [invoicePath, setInvoicePath] = useState<string>("");
   const [processing, setProcessing] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
@@ -76,6 +100,30 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
   // 发票列表状态
   const [invoices, setInvoices] = useState<InvoiceBasic[]>([]);
+  // 排序和选择相关状态
+  const [sorterState, setSorterState] = useState<AntdSorterResult<InvoiceBasic> | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
+  const [exportWithDetails, setExportWithDetails] = useState<boolean>(false);
+  
+  // 导出字段选择状态
+  const [exportFields, setExportFields] = useState<string[]>([
+    "序号", "文件名", "状态", "发票代码", "发票号码", "开票日期", 
+    "购买方名称", "购买方税号", "购买方地址电话", "购买方开户行账号", 
+    "销售方名称", "销售方税号", "销售方地址电话", "销售方开户行账号", 
+    "收款人", "复核人", "开票人",
+    "金额", "税额", "价税合计", "备注", "重复信息"
+  ]);
+  
+  // 可用的导出字段列表
+  const availableExportFields = [
+    "序号", "文件名", "状态", "发票代码", "发票号码", "开票日期", 
+    "购买方名称", "购买方税号", "购买方地址电话", "购买方开户行账号", 
+    "销售方名称", "销售方税号", "销售方地址电话", "销售方开户行账号", 
+    "收款人", "复核人", "开票人",
+    "金额", "税额", "价税合计", "备注", "重复信息"
+  ];
+  
   // 添加展开行的状态控制
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
 
@@ -250,6 +298,11 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
               remark: inv.remark,
               status: inv.status as InvoiceStatus,
               duplicateInfo: inv.duplicate_info,
+              type: inv.invoice_type || "", // 确保有type字段
+              invoice_type: inv.invoice_type || "", // 同时保留invoice_type字段，方便调试
+              payee: inv.payee || "",
+              reviewer: inv.reviewer || "",
+              drawer: inv.drawer || ""
             }))
           );
 
@@ -405,11 +458,154 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       return;
     }
 
+    // 显示导出配置弹窗
+    setExportModalVisible(true);
+  };
+
+  // 获取排序后的数据
+  const getSortedData = () => {
+    if (!sorterState || !sorterState.order) {
+      return invoices;
+    }
+
+    // 创建排序函数
+    const getSortFunction = () => {
+      const field = sorterState.field || "";
+      
+      if (field === "status") {
+        const statusOrder = {"正常": 1, "重复": 2, "解析失败": 3, "待统计": 4};
+        return (a: InvoiceBasic, b: InvoiceBasic) => 
+          statusOrder[a.status] - statusOrder[b.status];
+      }
+      
+      if (field === "date") {
+        return (a: InvoiceBasic, b: InvoiceBasic) => {
+          const parseDate = (dateStr: string) => {
+            if (!dateStr) return new Date(0);
+            const cleanDate = dateStr.replace(/[年月]/g, '.').replace(/日/g, '');
+            const [year, month, day] = cleanDate.split('.');
+            return new Date(Number(year), Number(month) - 1, Number(day));
+          };
+          
+          const dateA = parseDate(a.date);
+          const dateB = parseDate(b.date);
+          return dateA.getTime() - dateB.getTime();
+        };
+      }
+      
+      if (["totalAmount", "totalTax", "totalAmountTax"].includes(String(field))) {
+        return (a: InvoiceBasic, b: InvoiceBasic) => {
+          const valueA = parseFloat(a[field as keyof InvoiceBasic] as string) || 0;
+          const valueB = parseFloat(b[field as keyof InvoiceBasic] as string) || 0;
+          return valueA - valueB;
+        };
+      }
+      
+      // 默认返回比较函数
+      return (a: InvoiceBasic, b: InvoiceBasic) => {
+        const valueA = a[field as keyof InvoiceBasic] || '';
+        const valueB = b[field as keyof InvoiceBasic] || '';
+        return String(valueA).localeCompare(String(valueB));
+      };
+    };
+    
+    // 复制数组并应用排序
+    const sortFunc = getSortFunction();
+    const sortedData = [...invoices].sort(sortFunc);
+    
+    return sorterState.order === 'descend' ? sortedData.reverse() : sortedData;
+  };
+
+  // 确定导出
+  const handleExportConfirm = async () => {
+    setExportModalVisible(false);
+    
     try {
-      await pdfService.exportResults(outputPath);
+      // 获取要导出的数据
+      let dataToExport;
+      
+      if (selectedRowKeys.length > 0) {
+        // 如果有选择，则只导出选中的数据
+        dataToExport = getSortedData().filter((invoice) => 
+          selectedRowKeys.includes(invoice.filename)
+        );
+      } else {
+        // 否则导出所有数据（按照当前排序）
+        dataToExport = getSortedData();
+      }
+      
+      if (dataToExport.length === 0) {
+        messageApi.warning({
+          content: "没有可导出的数据",
+          duration: 3,
+        });
+        return;
+      }
+      
+      // 获取所有发票的完整详情，确保有正确的buyer和seller信息
+      const processedData = await Promise.all(dataToExport.map(async (invoice) => {
+        // 从pdfService获取完整的发票详情
+        const detail = pdfService.getInvoiceDetail(invoice.filename);
+        
+        if (!detail) {
+          // 如果找不到详情，使用现有的数据
+          return {
+            ...invoice,
+            type: invoice.type || "普通发票",
+            buyer: {
+              name: "",
+              tax_code: "",
+              address_phone: "",
+              bank_account: ""
+            },
+            seller: {
+              name: "",
+              tax_code: "",
+              address_phone: "",
+              bank_account: ""
+            },
+            payee: "",
+            reviewer: "",
+            drawer: ""
+          };
+        }
+        
+        // 使用详情中的完整数据
+        return {
+          ...invoice,
+          type: invoice.type || detail.invoice_type || "普通发票",
+          buyer: {
+            name: detail.buyer.name || "",
+            tax_code: detail.buyer.tax_code || "",
+            address_phone: detail.buyer.address_phone || "",
+            bank_account: detail.buyer.bank_account || ""
+          },
+          seller: {
+            name: detail.seller.name || "",
+            tax_code: detail.seller.tax_code || "",
+            address_phone: detail.seller.address_phone || "",
+            bank_account: detail.seller.bank_account || ""
+          },
+          payee: detail.payee || "",
+          reviewer: detail.reviewer || "",
+          drawer: detail.drawer || ""
+        };
+      }));
+      
+      // 准备导出参数
+      const exportOptions = {
+        path: outputPath,
+        filename: outputFilename,
+        exportWithDetails: exportWithDetails,
+        exportFields: exportFields,
+        invoices: processedData,
+      };
+      
+      // 将处理好的发票数据发送到后端
+      await pdfService.exportResults(exportOptions);
 
       messageApi.success({
-        content: `结果已导出至 ${outputPath}`,
+        content: `结果已导出至 ${outputPath}/${outputFilename}.xlsx`,
         duration: 3,
       });
     } catch (error) {
@@ -527,6 +723,11 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       key: "status",
       width: 90,
       align: "center",
+      showSorterTooltip: false,
+      sorter: (a, b) => {
+        const statusOrder = {"正常": 1, "重复": 2, "解析失败": 3, "待统计": 4};
+        return statusOrder[a.status] - statusOrder[b.status];
+      },
       render: (status: string) => {
         let color = "default";
         if (status === "正常") color = "success";
@@ -543,6 +744,16 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       width: 200,
       align: "center",
       ellipsis: true,
+      // render: (text: string, record: InvoiceBasic) => (
+      //   <a 
+      //     onClick={(e) => {
+      //       e.stopPropagation();
+      //       openPdfFile(record.filename);
+      //     }}
+      //   >
+      //     {text}
+      //   </a>
+      // )
     },
     {
       title: "开票日期",
@@ -551,6 +762,19 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       width: 160,
       align: "center",
       ellipsis: true,
+      showSorterTooltip: false,
+      sorter: (a, b) => {
+        const parseDate = (dateStr: string) => {
+          if (!dateStr) return new Date(0);
+          const cleanDate = dateStr.replace(/[年月]/g, '.').replace(/日/g, '');
+          const [year, month, day] = cleanDate.split('.');
+          return new Date(Number(year), Number(month) - 1, Number(day));
+        };
+        
+        const dateA = parseDate(a.date);
+        const dateB = parseDate(b.date);
+        return dateA.getTime() - dateB.getTime();
+      },
     },
     {
       title: "金额",
@@ -559,6 +783,12 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       width: 120,
       align: "center",
       ellipsis: true,
+      showSorterTooltip: false,
+      sorter: (a, b) => {
+        const amountA = parseFloat(a.totalAmount) || 0;
+        const amountB = parseFloat(b.totalAmount) || 0;
+        return amountA - amountB;
+      },
     },
     {
       title: "税额",
@@ -567,6 +797,12 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       width: 120,
       align: "center",
       ellipsis: true,
+      showSorterTooltip: false,
+      sorter: (a, b) => {
+        const taxA = parseFloat(a.totalTax) || 0;
+        const taxB = parseFloat(b.totalTax) || 0;
+        return taxA - taxB;
+      },
     },
     {
       title: "价税合计",
@@ -575,15 +811,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       width: 120,
       align: "center",
       ellipsis: true,
+      showSorterTooltip: false,
+      sorter: (a, b) => {
+        const totalA = parseFloat(a.totalAmountTax) || 0;
+        const totalB = parseFloat(b.totalAmountTax) || 0;
+        return totalA - totalB;
+      },
     },
-    // {
-    //   title: "备注",
-    //   dataIndex: "remark",
-    //   key: "remark",
-    //   align: "center",
-    //   width: 180,
-    //   ellipsis: true,
-    // },
     {
       title: "重复信息",
       dataIndex: "duplicateInfo",
@@ -598,10 +832,23 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       align: "center",
       fixed: "right",
       render: (_, record) => (
-        <Tooltip title="预览PDF">
+        // openPdfFile(record.filename);
+        <>
+          <Tooltip title="打开文件">
           <Button
             type="text"
             icon={<FilePdfOutlined />}
+            onClick={(e) => {
+              e.stopPropagation(); // 防止触发行点击事件
+              openPdfFile(record.filename);
+            }}
+            size="small"
+          />
+        </Tooltip>
+        <Tooltip title="预览PDF">
+          <Button
+            type="text"
+            icon={<FileSearchOutlined />}
             onClick={(e) => {
               e.stopPropagation(); // 防止触发行点击事件
               handlePreviewPdf(record.filename);
@@ -609,6 +856,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             size="small"
           />
         </Tooltip>
+        </>
       ),
     },
   ];
@@ -655,6 +903,73 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
       setPdfPreviewVisible(true);
     } catch (error) {
       messageApi.error(`准备预览PDF失败: ${error}`);
+    }
+  };
+
+  // 打开PDF文件
+  const openPdfFile = (filename: string) => {
+    try {
+      if (!fileInputRef.current || !fileInputRef.current.dataset.files) {
+        messageApi.error("未找到文件信息，请重新选择文件");
+        return;
+      }
+
+      const filePaths = JSON.parse(fileInputRef.current.dataset.files);
+      const invoiceDetail = pdfService.getInvoiceDetail(filename);
+      
+      if (!invoiceDetail) {
+        messageApi.error("无法找到发票详情信息");
+        return;
+      }
+      
+      const baseFilename = invoiceDetail.filename.split('#')[0]; // 移除页码标识
+      
+      const matchedFilePath = filePaths.find((path: string) => {
+        const pathFilename = path.substring(path.lastIndexOf('\\') + 1);
+        return pathFilename === baseFilename;
+      });
+      
+      if (!matchedFilePath) {
+        messageApi.error(`找不到匹配的文件: ${baseFilename}`);
+        return;
+      }
+      
+      // 使用Tauri API打开PDF文件
+      invoke("open_pdf_file", { path: matchedFilePath })
+        .then(() => {
+          console.log("成功打开PDF文件");
+        })
+        .catch((error) => {
+          console.error("打开PDF文件失败:", error);
+          messageApi.error("打开文件失败，请确认文件存在且可访问");
+        });
+    } catch (error) {
+      messageApi.error(`打开PDF文件失败: ${error}`);
+    }
+  };
+
+  // 处理表格排序变化
+  const handleTableChange = (
+    _pagination: TablePaginationConfig,
+    _filters: Record<string, FilterValue | null>,
+    sorter: AntdSorterResult<InvoiceBasic> | AntdSorterResult<InvoiceBasic>[],
+    _extra: TableCurrentDataSource<InvoiceBasic>
+  ) => {
+    if (Array.isArray(sorter)) {
+      // 如果是多列排序，暂时只使用第一个
+      if (sorter.length > 0) {
+        setSorterState({
+          field: sorter[0].field,
+          order: sorter[0].order,
+          columnKey: sorter[0].columnKey,
+        });
+      }
+    } else {
+      setSorterState({
+        field: sorter.field,
+        order: sorter.order,
+        columnKey: sorter.columnKey,
+      });
     }
   };
 
@@ -883,7 +1198,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         <div className="flex-1 overflow-hidden">
           <Table
             columns={columns}
-            dataSource={invoices}
+            dataSource={getSortedData()}
             rowKey="filename"
             rowHoverable={false}
             pagination={false}
@@ -891,6 +1206,11 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             scroll={{ x: 720, y: 'calc(100vh - 565px)' }}
             bordered
             size="small"
+            onChange={handleTableChange}
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys as string[]),
+            }}
             expandable={{
               expandedRowRender: (record) => (
                 <Table
@@ -959,15 +1279,46 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 setExpandedRowKey(expanded ? record.filename : null);
               },
             }}
-            onRow={(record) => ({
-              onClick: () => viewInvoiceDetail(record.filename),
-              className:
-                record.status === "重复"
-                  ? "cursor-pointer hover:bg-red-50 transition-colors duration-150"
-                  : record.status === "正常"
-                  ? "cursor-pointer hover:bg-green-50 transition-colors duration-150"
-                  : "cursor-pointer hover:bg-gray-50 transition-colors duration-150",
-            })}
+            onRow={(record) => {
+              // 计算行的类名
+              let rowClassName = "cursor-pointer transition-colors duration-150 ";
+              
+              // 判断是否为当前查看的行
+              if (selectedInvoice?.filename === record.filename) {
+                if (record.status === "重复") {
+                  rowClassName += "bg-red-200";
+                } else if (record.status === "正常") {
+                  rowClassName += "bg-green-200";
+                } else {
+                  rowClassName += "bg-blue-200";
+                }
+              } 
+              // 判断是否为选中的行
+              else if (selectedRowKeys.includes(record.filename)) {
+                if (record.status === "重复") {
+                  rowClassName += "bg-red-100 hover:bg-red-200";
+                } else if (record.status === "正常") {
+                  rowClassName += "bg-green-100 hover:bg-green-200";
+                } else {
+                  rowClassName += "bg-blue-100 hover:bg-blue-200";
+                }
+              } 
+              // 未选中的行
+              else {
+                if (record.status === "重复") {
+                  rowClassName += "hover:bg-red-50";
+                } else if (record.status === "正常") {
+                  rowClassName += "hover:bg-green-50";
+                } else {
+                  rowClassName += "hover:bg-gray-50";
+                }
+              }
+              
+              return {
+                onClick: () => viewInvoiceDetail(record.filename),
+                className: rowClassName
+              };
+            }}
             locale={{
               emptyText: (
                 <Empty
@@ -986,6 +1337,75 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         onClose={() => setPdfPreviewVisible(false)}
         filename={selectedPdfFile}
       />
+
+      {/* 导出配置模态框 */}
+      <Modal
+        title="导出配置"
+        open={exportModalVisible}
+        onOk={handleExportConfirm}
+        onCancel={() => setExportModalVisible(false)}
+        okText="确认导出"
+        cancelText="取消"
+        width={700}
+      >
+        <div className="py-4 space-y-4">
+          <div>
+            <div className="mb-2">文件名称：</div>
+            <Input 
+              placeholder="请输入导出的Excel文件名"
+              value={outputFilename} 
+              onChange={(e) => setOutputFilename(e.target.value)} 
+              suffix=".xlsx"
+            />
+          </div>
+          
+          <div>
+            <div className="mb-2">导出字段选择：</div>
+            <div className="border rounded p-3 max-h-40 overflow-y-auto">
+              <Checkbox.Group
+                value={exportFields}
+                onChange={(checkedValues) => {
+                  // 确保至少选择一个字段
+                  if (checkedValues.length > 0) {
+                    setExportFields(checkedValues as string[]);
+                  }
+                }}
+                className="grid grid-cols-3 gap-2"
+              >
+                {availableExportFields.map(field => (
+                  <Checkbox key={field} value={field}>{field}</Checkbox>
+                ))}
+              </Checkbox.Group>
+            </div>
+          </div>
+          
+          <div>
+            <Checkbox 
+              checked={exportWithDetails} 
+              onChange={(e) => setExportWithDetails(e.target.checked)}
+            >
+              导出发票明细（单独工作表）
+            </Checkbox>
+          </div>
+          
+          <div>
+            <div className="mb-2">导出范围：</div>
+            <Radio.Group 
+              defaultValue="all"
+              onChange={(e) => {
+                if (e.target.value === 'all') {
+                  setSelectedRowKeys([]);
+                }
+              }}
+            >
+              <Radio value="all">全部发票 ({invoices.length})</Radio>
+              <Radio value="selected" disabled={selectedRowKeys.length === 0}>
+                仅选中的发票 ({selectedRowKeys.length})
+              </Radio>
+            </Radio.Group>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

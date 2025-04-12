@@ -753,7 +753,13 @@ async fn select_output_path(app: tauri::AppHandle) -> Result<String, String> {
 
 // 导出结果
 #[tauri::command]
-fn export_results(path: &str, state: State<AppState>) -> Result<(), String> {
+fn export_results(
+    path: &str, 
+    filename: Option<&str>, 
+    export_with_details: Option<bool>,
+    export_fields: Option<Vec<String>>, // 添加导出字段参数
+    state: State<AppState>
+) -> Result<(), String> {
     let processing_state = state
         .lock()
         .map_err(|_| "Failed to lock state".to_string())?;
@@ -767,6 +773,36 @@ fn export_results(path: &str, state: State<AppState>) -> Result<(), String> {
     if !output_path.exists() {
         fs::create_dir_all(output_path).map_err(|e| format!("创建目录失败: {}", e))?;
     }
+
+    // 使用提供的文件名或默认名称
+    let file_name = filename.unwrap_or("发票数据汇总");
+    let include_details = export_with_details.unwrap_or(false);
+    
+    // 获取要导出的字段列表，如果未提供则使用默认值
+    let fields_to_export = export_fields.unwrap_or_else(|| vec![
+        "序号".to_string(), 
+        "文件名".to_string(), 
+        "状态".to_string(), 
+        "发票代码".to_string(), 
+        "发票号码".to_string(), 
+        "开票日期".to_string(), 
+        "购买方名称".to_string(), 
+        "购买方税号".to_string(), 
+        "购买方地址电话".to_string(), 
+        "购买方开户行账号".to_string(), 
+        "销售方名称".to_string(), 
+        "销售方税号".to_string(), 
+        "销售方地址电话".to_string(), 
+        "销售方开户行账号".to_string(), 
+        "收款人".to_string(), 
+        "复核人".to_string(), 
+        "开票人".to_string(), 
+        "金额".to_string(), 
+        "税额".to_string(), 
+        "价税合计".to_string(), 
+        "备注".to_string(), 
+        "重复信息".to_string()
+    ]);
 
     // 创建Excel工作簿
     let mut workbook = Workbook::new();
@@ -798,91 +834,121 @@ fn export_results(path: &str, state: State<AppState>) -> Result<(), String> {
     let mut duplicate_group_formats = std::collections::HashMap::new();
     let mut duplicate_group_count = 0;
 
-    // 创建汇总表 - add_worksheet不返回Result
-    let worksheet = workbook.add_worksheet();
-    let _ = worksheet.set_name("发票汇总");
+    // 创建汇总表和明细表（如果需要）
+    let main_sheet_name = "发票汇总";
+    let detail_sheet_name = "发票明细";
+    
+    // 首先添加所有工作表到工作簿
+    workbook.add_worksheet(); // 主工作表 (索引 0)
+    
+    // 如果需要明细，添加第二个工作表
+    let has_detail = include_details;
+    if has_detail {
+        workbook.add_worksheet(); // 明细工作表 (索引 1)
+    }
+    
+    // 设置工作表名称 (只能一次访问一个工作表)
+    if let Ok(main_sheet) = workbook.worksheet_from_index(0) {
+        main_sheet.set_name(main_sheet_name)
+            .map_err(|e| format!("设置主工作表名称失败: {}", e))?;
+    }
+    
+    if has_detail {
+        if let Ok(detail_sheet) = workbook.worksheet_from_index(1) {
+            detail_sheet.set_name(detail_sheet_name)
+                .map_err(|e| format!("设置明细工作表名称失败: {}", e))?;
+        }
+    }
 
-    // 设置列宽
-    worksheet
-        .set_column_width(0, 10)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 序号
-    worksheet
-        .set_column_width(1, 30)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 文件名称
-    worksheet
-        .set_column_width(2, 20)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 发票代码
-    worksheet
-        .set_column_width(3, 20)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 发票号码
-    worksheet
-        .set_column_width(4, 15)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 开票日期
-    worksheet
-        .set_column_width(5, 30)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 项目名称
-    worksheet
-        .set_column_width(6, 10)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 数量
-    worksheet
-        .set_column_width(7, 15)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 金额
-    worksheet
-        .set_column_width(8, 10)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 税率
-    worksheet
-        .set_column_width(9, 15)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 税额
-    worksheet
-        .set_column_width(10, 30)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 备注
-    worksheet
-        .set_column_width(11, 10)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 状态
-    worksheet
-        .set_column_width(12, 20)
-        .map_err(|e| format!("设置列宽失败: {}", e))?; // 重复信息
+    // 设置字段对应的列宽
+    let column_widths = [
+        ("序号", 10),
+        ("文件名", 30),
+        ("状态", 10),
+        ("发票代码", 20),
+        ("发票号码", 20),
+        ("开票日期", 15),
+        ("购买方名称", 30),
+        ("购买方税号", 25),
+        ("购买方地址电话", 40),
+        ("购买方开户行账号", 40),
+        ("销售方名称", 30),
+        ("销售方税号", 25),
+        ("销售方地址电话", 40),
+        ("销售方开户行账号", 40),
+        ("收款人", 15),
+        ("复核人", 15),
+        ("开票人", 15),
+        ("金额", 15),
+        ("税额", 15),
+        ("价税合计", 15),
+        ("备注", 30),
+        ("重复信息", 20),
+    ];
 
-    // 写入汇总表头
-    worksheet
-        .write_string_with_format(0, 0, "序号", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 1, "文件名称", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 2, "发票代码", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 3, "发票号码", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 4, "开票日期", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 5, "项目名称", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 6, "数量", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 7, "金额", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 8, "税率", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 9, "税额", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 10, "备注", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 11, "状态", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
-    worksheet
-        .write_string_with_format(0, 12, "重复信息", &header_format.clone())
-        .map_err(|e| format!("写入表头失败: {}", e))?;
+    // 设置主工作表列宽和表头
+    if let Ok(worksheet) = workbook.worksheet_from_index(0) {
+        // 根据导出字段设置列宽
+        for (idx, field) in fields_to_export.iter().enumerate() {
+            if let Some((_, width)) = column_widths.iter().find(|(name, _)| name == field) {
+                worksheet
+                    .set_column_width(idx as u16, *width)
+                    .map_err(|e| format!("设置列宽失败: {}", e))?;
+            }
+        }
+
+        // 写入汇总表头
+        for (idx, field) in fields_to_export.iter().enumerate() {
+            worksheet
+                .write_string_with_format(0, idx as u16, field, &header_format.clone())
+                .map_err(|e| format!("写入表头失败: {}", e))?;
+        }
+    }
+
+    // 设置明细表列宽和表头
+    if has_detail {
+        if let Ok(worksheet) = workbook.worksheet_from_index(1) {
+            // 设置明细表头
+            worksheet.set_column_width(0, 10)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 序号
+            worksheet.set_column_width(1, 25)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 发票日期
+            worksheet.set_column_width(2, 25)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 发票号码
+            worksheet.set_column_width(3, 40)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 项目名称
+            worksheet.set_column_width(4, 15)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 数量
+            worksheet.set_column_width(5, 15)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 单价
+            worksheet.set_column_width(6, 15)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 金额
+            worksheet.set_column_width(7, 15)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 税率
+            worksheet.set_column_width(8, 15)
+                .map_err(|e| format!("设置明细列宽失败: {}", e))?; // 税额
+            
+            // 写入明细表头
+            worksheet.write_string_with_format(0, 0, "序号", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 1, "发票日期", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 2, "发票号码", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 3, "项目名称", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 4, "数量", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 5, "单价", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 6, "金额", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 7, "税率", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+            worksheet.write_string_with_format(0, 8, "税额", &header_format.clone())
+                .map_err(|e| format!("写入明细表头失败: {}", e))?;
+        }
+    }
 
     // 按照发票代码和发票号码分组，创建颜色组
     let mut duplicate_groups = std::collections::HashMap::new();
@@ -904,9 +970,10 @@ fn export_results(path: &str, state: State<AppState>) -> Result<(), String> {
     }
 
     // 写入汇总数据
-    let mut row = 1;
-    for invoice in &processing_state.invoices {
-        for item in &invoice.items {
+    if let Ok(worksheet) = workbook.worksheet_from_index(0) {
+        let mut row = 1;
+        
+        for invoice in &processing_state.invoices {
             // 确定格式
             let mut format = data_format.clone();
             if invoice.status == "重复" {
@@ -920,59 +987,295 @@ fn export_results(path: &str, state: State<AppState>) -> Result<(), String> {
                 }
             }
 
-            // 写入数据
-            worksheet
-                .write_number_with_format(row, 0, invoice.index as f64, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 1, &invoice.filename, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 2, &invoice.code, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 3, &invoice.number, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 4, &invoice.date, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 5, &item.name, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 6, &item.quantity, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 7, &item.amount, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 8, &item.tax_rate, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 9, &item.tax, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 10, &invoice.remark, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 11, &invoice.status, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
-            worksheet
-                .write_string_with_format(row, 12, &invoice.duplicate_info, &format)
-                .map_err(|e| format!("写入数据失败: {}", e))?;
+            // 获取每个字段的值，根据字段名称
+            for (idx, field) in fields_to_export.iter().enumerate() {
+                match field.as_str() {
+                    "序号" => {
+                        worksheet
+                            .write_number_with_format(row, idx as u16, invoice.index as f64, &format)
+                            .map_err(|e| format!("写入序号失败: {}", e))?;
+                    },
+                    "文件名" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.filename, &format)
+                            .map_err(|e| format!("写入文件名失败: {}", e))?;
+                    },
+                    "状态" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.status, &format)
+                            .map_err(|e| format!("写入状态失败: {}", e))?;
+                    },
+                    "发票代码" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.code, &format)
+                            .map_err(|e| format!("写入发票代码失败: {}", e))?;
+                    },
+                    "发票号码" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.number, &format)
+                            .map_err(|e| format!("写入发票号码失败: {}", e))?;
+                    },
+                    "开票日期" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.date, &format)
+                            .map_err(|e| format!("写入开票日期失败: {}", e))?;
+                    },
+                    "购买方名称" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.buyer.name, &format)
+                            .map_err(|e| format!("写入购买方名称失败: {}", e))?;
+                    },
+                    "购买方税号" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.buyer.tax_code, &format)
+                            .map_err(|e| format!("写入购买方税号失败: {}", e))?;
+                    },
+                    "购买方地址电话" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.buyer.address_phone, &format)
+                            .map_err(|e| format!("写入购买方地址电话失败: {}", e))?;
+                    },
+                    "购买方开户行账号" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.buyer.bank_account, &format)
+                            .map_err(|e| format!("写入购买方开户行账号失败: {}", e))?;
+                    },
+                    "销售方名称" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.seller.name, &format)
+                            .map_err(|e| format!("写入销售方名称失败: {}", e))?;
+                    },
+                    "销售方税号" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.seller.tax_code, &format)
+                            .map_err(|e| format!("写入销售方税号失败: {}", e))?;
+                    },
+                    "销售方地址电话" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.seller.address_phone, &format)
+                            .map_err(|e| format!("写入销售方地址电话失败: {}", e))?;
+                    },
+                    "销售方开户行账号" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.seller.bank_account, &format)
+                            .map_err(|e| format!("写入销售方开户行账号失败: {}", e))?;
+                    },
+                    "收款人" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.payee, &format)
+                            .map_err(|e| format!("写入收款人失败: {}", e))?;
+                    },
+                    "复核人" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.reviewer, &format)
+                            .map_err(|e| format!("写入复核人失败: {}", e))?;
+                    },
+                    "开票人" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.drawer, &format)
+                            .map_err(|e| format!("写入开票人失败: {}", e))?;
+                    },
+                    "金额" => {
+                        // 尝试将金额转换为数字，如果失败则保持字符串格式
+                        match invoice.total_amount.parse::<f64>() {
+                            Ok(amount) => {
+                                worksheet
+                                    .write_number_with_format(row, idx as u16, amount, &format)
+                                    .map_err(|e| format!("写入金额失败: {}", e))?;
+                            },
+                            Err(_) => {
+                                worksheet
+                                    .write_string_with_format(row, idx as u16, &invoice.total_amount, &format)
+                                    .map_err(|e| format!("写入金额失败: {}", e))?;
+                            }
+                        }
+                    },
+                    "税额" => {
+                        // 尝试将税额转换为数字，如果失败则保持字符串格式
+                        match invoice.total_tax.parse::<f64>() {
+                            Ok(tax) => {
+                                worksheet
+                                    .write_number_with_format(row, idx as u16, tax, &format)
+                                    .map_err(|e| format!("写入税额失败: {}", e))?;
+                            },
+                            Err(_) => {
+                                worksheet
+                                    .write_string_with_format(row, idx as u16, &invoice.total_tax, &format)
+                                    .map_err(|e| format!("写入税额失败: {}", e))?;
+                            }
+                        }
+                    },
+                    "价税合计" => {
+                        // 尝试将价税合计转换为数字，如果失败则保持字符串格式
+                        match invoice.total_amount_tax.parse::<f64>() {
+                            Ok(total) => {
+                                worksheet
+                                    .write_number_with_format(row, idx as u16, total, &format)
+                                    .map_err(|e| format!("写入价税合计失败: {}", e))?;
+                            },
+                            Err(_) => {
+                                worksheet
+                                    .write_string_with_format(row, idx as u16, &invoice.total_amount_tax, &format)
+                                    .map_err(|e| format!("写入价税合计失败: {}", e))?;
+                            }
+                        }
+                    },
+                    "备注" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.remark, &format)
+                            .map_err(|e| format!("写入备注失败: {}", e))?;
+                    },
+                    "重复信息" => {
+                        worksheet
+                            .write_string_with_format(row, idx as u16, &invoice.duplicate_info, &format)
+                            .map_err(|e| format!("写入重复信息失败: {}", e))?;
+                    },
+                    _ => {}
+                }
+            }
 
             row += 1;
         }
     }
+    
+    // 如果启用了明细导出功能，则写入明细表
+    if has_detail {
+        if let Ok(worksheet) = workbook.worksheet_from_index(1) {
+            // 明细工作表中写入数据
+            let mut row: u32 = 1;
+            
+            for invoice in &processing_state.invoices {
+                if !invoice.items.is_empty() {
+                    // 每个发票和它的商品作为一组
+                    let invoice_row_start = row;
+                    let invoice_row_end = invoice_row_start + invoice.items.len() as u32 - 1;
+                    
+                    // 写入发票基本信息（可能跨多行）
+                    if invoice_row_start < invoice_row_end {
+                        // 合并单元格
+                        worksheet
+                            .merge_range(
+                                invoice_row_start,
+                                0,
+                                invoice_row_end,
+                                0,
+                                &invoice.index.to_string(),
+                                &data_format,
+                            )
+                            .map_err(|e| format!("合并单元格失败: {}", e))?;
+                        
+                        worksheet
+                            .merge_range(
+                                invoice_row_start,
+                                1,
+                                invoice_row_end,
+                                1,
+                                &invoice.date,
+                                &data_format,
+                            )
+                            .map_err(|e| format!("合并单元格失败: {}", e))?;
+                        
+                        worksheet
+                            .merge_range(
+                                invoice_row_start,
+                                2,
+                                invoice_row_end,
+                                2,
+                                &invoice.number,
+                                &data_format,
+                            )
+                            .map_err(|e| format!("合并单元格失败: {}", e))?;
+                    } else {
+                        // 单行直接写入
+                        worksheet
+                            .write_string_with_format(row, 0, &invoice.index.to_string(), &data_format)
+                            .map_err(|e| format!("写入序号失败: {}", e))?;
+                        
+                        worksheet
+                            .write_string_with_format(row, 1, &invoice.date, &data_format)
+                            .map_err(|e| format!("写入发票日期失败: {}", e))?;
+                        
+                        worksheet
+                            .write_string_with_format(row, 2, &invoice.number, &data_format)
+                            .map_err(|e| format!("写入发票号码失败: {}", e))?;
+                    }
+                    
+                    // 写入每个商品明细
+                    for (i, item) in invoice.items.iter().enumerate() {
+                        let current_row = invoice_row_start + i as u32;
+                        
+                        // 项目名称
+                        worksheet
+                            .write_string_with_format(current_row, 3, &item.name, &data_format)
+                            .map_err(|e| format!("写入项目名称失败: {}", e))?;
+                        
+                        // 尝试将数量转换为数字类型
+                        if let Ok(quantity) = item.quantity.parse::<f64>() {
+                            worksheet
+                                .write_number_with_format(current_row, 4, quantity, &data_format)
+                                .map_err(|e| format!("写入数量失败: {}", e))?;
+                        } else {
+                            worksheet
+                                .write_string_with_format(current_row, 4, &item.quantity, &data_format)
+                                .map_err(|e| format!("写入数量失败: {}", e))?;
+                        }
+                        
+                        // 尝试将单价转换为数字类型
+                        if let Ok(price) = item.price.parse::<f64>() {
+                            worksheet
+                                .write_number_with_format(current_row, 5, price, &data_format)
+                                .map_err(|e| format!("写入单价失败: {}", e))?;
+                        } else {
+                            worksheet
+                                .write_string_with_format(current_row, 5, &item.price, &data_format)
+                                .map_err(|e| format!("写入单价失败: {}", e))?;
+                        }
+                        
+                        // 尝试将金额转换为数字类型
+                        if let Ok(amount) = item.amount.parse::<f64>() {
+                            worksheet
+                                .write_number_with_format(current_row, 6, amount, &data_format)
+                                .map_err(|e| format!("写入金额失败: {}", e))?;
+                        } else {
+                            worksheet
+                                .write_string_with_format(current_row, 6, &item.amount, &data_format)
+                                .map_err(|e| format!("写入金额失败: {}", e))?;
+                        }
+                        
+                        // 税率
+                        worksheet
+                            .write_string_with_format(current_row, 7, &item.tax_rate, &data_format)
+                            .map_err(|e| format!("写入税率失败: {}", e))?;
+                        
+                        // 尝试将税额转换为数字类型
+                        if let Ok(tax) = item.tax.parse::<f64>() {
+                            worksheet
+                                .write_number_with_format(current_row, 8, tax, &data_format)
+                                .map_err(|e| format!("写入税额失败: {}", e))?;
+                        } else {
+                            worksheet
+                                .write_string_with_format(current_row, 8, &item.tax, &data_format)
+                                .map_err(|e| format!("写入税额失败: {}", e))?;
+                        }
+                    }
+                    
+                    // 更新行号
+                    row = invoice_row_end + 1;
+                }
+            }
+        }
+    }
 
-    // 保存Excel文件
-    let excel_path = output_path.join("发票数据汇总.xlsx");
+    // 保存Excel文件，使用提供的文件名
+    let excel_path = output_path.join(format!("{}.xlsx", file_name));
     workbook
         .save(&excel_path)
         .map_err(|e| format!("保存Excel文件失败: {}", e))?;
 
     // 打开Excel文件
-    APP.get().unwrap().opener().open_path(excel_path.to_str().unwrap(), Option::<String>::None).unwrap();
+    APP.get().unwrap().opener().open_path(excel_path.to_str().unwrap(), Option::<String>::None)
+        .map_err(|e| format!("打开Excel文件失败: {}", e))?;
+    
     Ok(())
 }
 
@@ -1025,6 +1328,13 @@ fn read_file_to_bytes(path: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+// 打开PDF文件
+#[tauri::command]
+async fn open_pdf_file(path: &str) -> Result<(), String> {
+    APP.get().unwrap().opener().open_path(path, Option::<String>::None)
+        .map_err(|e| format!("打开PDF文件失败: {}", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let processing_state: AppState = Arc::new(Mutex::new(ProcessingState::default()));
@@ -1044,7 +1354,8 @@ pub fn run() {
             export_results,
             set_invoices,
             read_file_to_bytes,
-            parse_invoice_text
+            parse_invoice_text,
+            open_pdf_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

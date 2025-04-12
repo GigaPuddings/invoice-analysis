@@ -301,21 +301,126 @@ class PdfService {
   }
 
   /**
-   * 导出结果
-   * @param path 导出路径
+   * 导出结果到Excel
+   * @param options 导出配置选项
    */
-  async exportResults(path: string): Promise<void> {
-    if (this.invoices.length === 0) {
+  async exportResults(options: {
+    path: string;
+    filename: string;
+    exportWithDetails: boolean;
+    exportFields?: string[];
+    invoices: any[];
+  }): Promise<void> {
+    if (!options.path) {
+      throw new Error("未指定导出路径");
+    }
+
+    if (options.invoices.length === 0) {
       throw new Error("没有可导出的发票数据");
     }
 
     // 调用Rust后端导出Excel
     try {
+      // 处理invoices数据，确保结构与后端一致
+      const processedInvoices = options.invoices.map(invoice => {
+        // 确保buyer和seller对象符合后端期望的格式
+        let buyer = {
+          name: "",
+          tax_code: "",
+          address_phone: "",
+          bank_account: ""
+        };
+        
+        let seller = {
+          name: "",
+          tax_code: "",
+          address_phone: "",
+          bank_account: ""
+        };
+        
+        // 处理buyer信息
+        if (invoice.buyer) {
+          buyer = {
+            name: invoice.buyer.name || "",
+            tax_code: invoice.buyer.taxCode || invoice.buyer.tax_code || "",
+            address_phone: invoice.buyer.addressPhone || invoice.buyer.address_phone || "",
+            bank_account: invoice.buyer.bankAccount || invoice.buyer.bank_account || ""
+          };
+        }
+        
+        // 处理seller信息
+        if (invoice.seller) {
+          seller = {
+            name: invoice.seller.name || "",
+            tax_code: invoice.seller.taxCode || invoice.seller.tax_code || "",
+            address_phone: invoice.seller.addressPhone || invoice.seller.address_phone || "",
+            bank_account: invoice.seller.bankAccount || invoice.seller.bank_account || ""
+          };
+        }
+        
+        // 创建一个新的完整发票对象，映射所有字段
+        const processedInvoice: any = {
+          // 基本字段
+          filename: invoice.filename,
+          index: invoice.index,
+          title: invoice.title || "",
+          // 确保type字段存在且有值
+          type: invoice.type || invoice.invoice_type || "普通发票",
+          code: invoice.code || "",
+          number: invoice.number || "",
+          date: invoice.date || "",
+          checksum: invoice.checksum || invoice.machineNumber || "",
+          machine_number: invoice.machineNumber || invoice.machine_number || "",
+          password: invoice.password || "",
+          remark: invoice.remark || "",
+          
+          // 金额相关
+          total_amount: invoice.totalAmount || invoice.total_amount || "0.00",
+          total_tax: invoice.totalTax || invoice.total_tax || "0.00",
+          total_amount_tax: invoice.totalAmountTax || invoice.total_amount_tax || "0.00",
+          
+          // 人员信息
+          payee: invoice.payee || "",
+          reviewer: invoice.reviewer || "",
+          drawer: invoice.drawer || "",
+          
+          // 状态信息
+          status: invoice.status || "待统计",
+          duplicate_info: invoice.duplicateInfo || invoice.duplicate_info || "",
+          
+          // 买卖方信息
+          buyer,
+          seller,
+        };
+        
+        // 处理items数组
+        if (invoice.details || invoice.items) {
+          const items = invoice.details || invoice.items || [];
+          processedInvoice.items = items.map((item: any) => ({
+            name: item.name || "",
+            quantity: item.quantity || "0",
+            price: item.price || "0",
+            amount: item.amount || "0",
+            tax_rate: item.tax_rate || item.taxRate || "0",
+            tax: item.tax || "0",
+          }));
+        } else {
+          processedInvoice.items = [];
+        }
+        
+        return processedInvoice;
+      });
+      
       // 先将处理好的发票数据发送到后端
-      await invoke("set_invoices", { invoices: this.invoices });
+      await invoke("set_invoices", { invoices: processedInvoices });
 
       // 然后导出Excel
-      await invoke("export_results", { path });
+      await invoke("export_results", { 
+        path: options.path,
+        filename: options.filename || "发票数据汇总",
+        exportWithDetails: options.exportWithDetails,
+        exportFields: options.exportFields
+      });
     } catch (error) {
       console.error("导出失败:", error);
       throw error;
