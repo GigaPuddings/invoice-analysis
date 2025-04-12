@@ -758,7 +758,7 @@ const PdfPreview: React.FC<PdfPreviewProps> = ({ visible, onClose, filename }) =
   };
   
   // 更新窗口大小状态
-  const onResizeStop: ResizeCallback = (e, direction, ref, d) => {
+  const onResizeStop: ResizeCallback = (_e, _direction, ref, d) => {
     // 更新大小状态
     setWindowSize({
       width: windowSize.width === DEFAULT_WIDTH 

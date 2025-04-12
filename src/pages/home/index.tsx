@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Layout, Modal, notification } from "antd";
+import { Layout } from "antd";
 import ConfigPanel from "./components/ConfigPanel";
 import InvoiceDetail from "./components/InvoiceDetail";
 
