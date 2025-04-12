@@ -9,6 +9,7 @@ use std::{
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_updater::UpdaterExt;
 // use tauri_plugin_notification::NotificationExt;
 
 // 定义一个全局静态变量来存储 AppHandle
@@ -794,6 +795,30 @@ fn parse_generic_fapiao(
     invoice
 }
 
+async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
+  if let Some(update) = app.updater()?.check().await? {
+    let mut downloaded = 0;
+
+    // 另外，我们也可以单独调用update.download（）和update.install（）
+    update
+      .download_and_install(
+        |chunk_length, content_length| {
+          downloaded += chunk_length;
+          println!("downloaded {downloaded} from {content_length:?}");
+        },
+        || {
+          println!("download finished");
+        },
+      )
+      .await?;
+
+    println!("update installed");
+    app.restart();
+  }
+
+  Ok(())
+}
+
 // 选择输出路径
 #[tauri::command]
 async fn select_output_path(app: tauri::AppHandle) -> Result<String, String> {
@@ -1506,8 +1531,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+
             // 在应用启动时初始化 APP
             APP.set(app.handle().clone()).unwrap();
+            
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+              update(handle).await.unwrap();
+            });
             Ok(())
         })
         .manage(processing_state)

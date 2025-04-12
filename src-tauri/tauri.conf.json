@@ -24,8 +24,22 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://ghfast.top/github.com/GigaPuddings/invoice-analysis/releases/latest/download/latest.json",
+        "https://github.com/GigaPuddings/invoice-analysis/releases/latest/download/latest.json" 
+      ],
+      "windows": {
+        "installMode": "basicUi"
+      },
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUxNjFCNjVGMTY1OTc3NUUKUldSZWQxa1dYN1poNFpidktybDV2OGF4elpPK2IxUThGdi9hbGdaRjJ4akRqL2ptWjdQdXViYkwK"
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": [
       "nsis"
     ],

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "updater": "node scripts/updater.mjs",
+    "tag": "node scripts/tag.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
@@ -15,6 +17,7 @@
     "@tauri-apps/plugin-dialog": "~2",
     "@tauri-apps/plugin-notification": "~2",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-updater": "~2",
     "antd": "^5.24.6",
     "framer-motion": "^12.6.2",
     "pdfjs-dist": "^5.1.91",
