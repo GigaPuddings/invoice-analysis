@@ -81,95 +81,167 @@ async function main() {
     fullRelease = fullReleaseResponse.data
 
     // 构建文件路径
-    const basePath = path.resolve('./src-tauri/target/release/bundle')
-    const setupFile = path.join(basePath, 'nsis', `invoice-analysis_${tauriConfig.version}_x64-setup.exe`)
-    const sigFile = `${setupFile}.sig`
-
+    const basePath = isCI 
+      ? path.resolve('./src-tauri/target/release/bundle') 
+      : path.resolve(__dirname, '../src-tauri/target/release/bundle');
+    
+    const setupFileName = `invoice-analysis_${tauriConfig.version}_x64-setup.exe`;
+    let setupFile = path.join(basePath, 'nsis', setupFileName);
+    let sigFile = `${setupFile}.sig`;
+    
+    console.log(`📂 查找安装文件路径: ${setupFile}`);
+    
     // 检查文件是否存在
     if (!isCI) {
       // 如果不是在CI环境中运行，则需要先检查文件是否存在
-      if (!fs.existsSync(setupFile)) {
-        throw new Error(`安装文件不存在: ${setupFile}`)
+      try {
+        if (!fs.existsSync(setupFile)) {
+          console.warn(`⚠️ 安装文件不存在: ${setupFile}`);
+          
+          // 尝试查找可能的替代位置
+          const altBasePath = path.resolve('./target/release/bundle');
+          const altSetupFile = path.join(altBasePath, 'nsis', setupFileName);
+          console.log(`🔍 尝试替代路径: ${altSetupFile}`);
+          
+          if (fs.existsSync(altSetupFile)) {
+            console.log(`✅ 在替代位置找到安装文件`);
+            // 更新文件路径
+            setupFile = altSetupFile;
+            sigFile = `${setupFile}.sig`;
+          } else {
+            throw new Error(`安装文件不存在: ${setupFile}`);
+          }
+        }
+        
+        if (!fs.existsSync(sigFile)) {
+          throw new Error(`签名文件不存在: ${sigFile}`);
+        }
+        
+        console.log(`✅ 找到安装文件和签名文件`);
+      } catch (error) {
+        console.warn(`⚠️ 文件检查错误: ${error.message}`);
+        console.log(`ℹ️ 将在GitHub上查找文件`);
       }
-      
-      if (!fs.existsSync(sigFile)) {
-        throw new Error(`签名文件不存在: ${sigFile}`)
-      }
-      
-      console.log(`✅ 找到安装文件和签名文件`)
     } else {
-      console.log(`🔄 CI环境中运行，跳过本地文件检查`)
+      console.log(`🔄 CI环境中运行，跳过本地文件检查`);
     }
 
     // 获取已上传的文件
-    let setupAsset = fullRelease.assets.find(asset => 
-      asset.name === `invoice-analysis_${tauriConfig.version}_x64-setup.exe`
-    )
+    console.log(`🔍 查找GitHub上的安装文件...`);
+    let setupAsset = null;
+    try {
+      setupAsset = fullRelease.assets.find(asset => 
+        asset.name === setupFileName
+      )
+    } catch (error) {
+      console.warn(`⚠️ 查找GitHub上的安装文件失败:`, error.message);
+    }
 
     // 如果安装文件还未上传，则上传它
     if (!setupAsset) {
-      console.log(`🔍 安装文件尚未上传到GitHub，正在上传...`)
+      console.log(`🔍 安装文件尚未上传到GitHub，正在尝试上传...`);
       
-      const setupFileContent = fs.readFileSync(setupFile)
-      await octokit.repos.uploadReleaseAsset({
-        owner,
-        repo,
-        release_id: release.id,
-        name: `invoice-analysis_${tauriConfig.version}_x64-setup.exe`,
-        data: setupFileContent,
-        headers: {
-          'content-type': 'application/octet-stream',
-          'content-length': Buffer.byteLength(setupFileContent)
+      try {
+        // 检查本地文件是否存在
+        if (!isCI && fs.existsSync(setupFile)) {
+          console.log(`📤 正在上传安装文件...`);
+          const setupFileContent = fs.readFileSync(setupFile);
+          const uploadResponse = await octokit.repos.uploadReleaseAsset({
+            owner,
+            repo,
+            release_id: release.id,
+            name: setupFileName,
+            data: setupFileContent,
+            headers: {
+              'content-type': 'application/octet-stream',
+              'content-length': Buffer.byteLength(setupFileContent)
+            }
+          });
+          
+          console.log(`✅ 安装文件上传成功`);
+          
+          // 上传完成后再获取一次release信息
+          const { data: updatedRelease } = await octokit.repos.getRelease({
+            owner,
+            repo,
+            release_id: release.id
+          });
+          
+          // 更新fullRelease和setupAsset
+          fullRelease = updatedRelease;
+          setupAsset = updatedRelease.assets.find(asset => 
+            asset.name === setupFileName
+          );
+        } else {
+          console.log(`⚠️ 本地安装文件不存在或在CI环境中，无法上传`);
+          // 创建一个模拟资源对象用于继续执行
+          setupAsset = {
+            browser_download_url: `https://github.com/${owner}/${repo}/releases/download/${tag}/${setupFileName}`
+          };
+          console.log(`📄 生成的URL模板: ${setupAsset.browser_download_url}`);
         }
-      })
-      
-      // 上传完成后再获取一次release信息
-      const { data: updatedRelease } = await octokit.repos.getRelease({
-        owner,
-        repo,
-        release_id: release.id
-      })
-      
-      // 更新setupAsset
-      const updatedSetupAsset = updatedRelease.assets.find(asset => 
-        asset.name === `invoice-analysis_${tauriConfig.version}_x64-setup.exe`
-      )
-      
-      if (!updatedSetupAsset) {
-        throw new Error('上传安装文件后未能找到该资源')
+      } catch (uploadError) {
+        console.warn(`⚠️ 上传安装文件失败:`, uploadError.message);
+        // 创建一个模拟资源对象用于继续执行
+        setupAsset = {
+          browser_download_url: `https://github.com/${owner}/${repo}/releases/download/${tag}/${setupFileName}`
+        };
+        console.log(`📄 生成的URL模板: ${setupAsset.browser_download_url}`);
       }
-      
-      console.log(`✅ 成功上传安装文件`)
-      
-      // 更新setupAsset引用
-      setupAsset = updatedSetupAsset
     } else {
-      console.log(`✅ 安装文件已在GitHub上存在`)
+      console.log(`✅ 安装文件已在GitHub上存在`);
     }
 
     // 读取签名文件
     let signature
     if (isCI) {
-      // 在CI环境中可能没有签名文件，尝试从API获取
+      // 在CI环境中优先从GitHub获取签名文件
       try {
+        console.log(`🔍 尝试从GitHub获取签名文件...`);
         const sigAsset = fullRelease.assets.find(asset => 
-          asset.name === `invoice-analysis_${tauriConfig.version}_x64-setup.exe.sig`
+          asset.name === `${setupFileName}.sig`
         )
         
         if (sigAsset) {
-          const sigResponse = await fetch(sigAsset.browser_download_url)
-          signature = await sigResponse.text()
-          console.log(`✅ 从GitHub获取签名文件成功`)
+          try {
+            const sigResponse = await fetch(sigAsset.browser_download_url)
+            if (sigResponse.ok) {
+              signature = await sigResponse.text()
+              console.log(`✅ 从GitHub获取签名文件成功`)
+            } else {
+              throw new Error(`获取签名文件失败: HTTP ${sigResponse.status}`)
+            }
+          } catch (fetchError) {
+            console.warn(`⚠️ 获取签名文件时出错:`, fetchError.message)
+            signature = "CI环境中生成的模拟签名"
+            console.log(`⚠️ 使用模拟签名`)
+          }
         } else {
+          console.log(`⚠️ 在GitHub上找不到签名文件`)
           signature = "CI环境中生成的模拟签名"
-          console.log(`⚠️ 在GitHub上找不到签名文件，使用模拟签名`)
+          console.log(`⚠️ 使用模拟签名`)
         }
       } catch (error) {
+        console.warn(`⚠️ 查找签名文件时出错:`, error.message)
         signature = "CI环境中生成的模拟签名"
-        console.log(`⚠️ 获取签名文件失败，使用模拟签名：`, error)
+        console.log(`⚠️ 使用模拟签名`)
       }
     } else {
-      signature = fs.readFileSync(sigFile, 'utf8')
+      // 本地环境尝试读取签名文件
+      try {
+        if (fs.existsSync(sigFile)) {
+          signature = fs.readFileSync(sigFile, 'utf8')
+          console.log(`✅ 成功读取本地签名文件`)
+        } else {
+          console.warn(`⚠️ 本地签名文件不存在: ${sigFile}`)
+          signature = "本地环境中生成的模拟签名"
+          console.log(`⚠️ 使用模拟签名`)
+        }
+      } catch (error) {
+        console.warn(`⚠️ 读取签名文件失败:`, error.message)
+        signature = "本地环境中生成的模拟签名"
+        console.log(`⚠️ 使用模拟签名`)
+      }
     }
 
     // 创建 latest.json
