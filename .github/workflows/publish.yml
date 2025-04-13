@@ -47,6 +47,9 @@ jobs:
           releaseDraft: false
           prerelease: false
 
+      - name: Wait for assets upload
+        run: powershell Start-Sleep -s 10
+        
       - name: Upload assets
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
