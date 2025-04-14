@@ -343,7 +343,7 @@ fn extract_party_info(
     let offset_x_right = if invoice.invoice_type == "普通发票" {
         250.0
     } else {
-        300.0
+        160.0
     };
     let offset_y = if invoice.invoice_type == "普通发票" {
         0.0
@@ -364,19 +364,18 @@ fn extract_party_info(
         (footer_item.x as f64).floor() + offset_x_right,
         (footer_item.y as f64).floor() + offset_y,
     );
-
     // 查找区域内的所有文本项
     let area_items: Vec<&TextItem> = text_items
         .iter()
         .filter(|item| {
             item.x >= area_left_top.0
                 && item.x <= area_right_top.0
+                && item.x >= area_left_top.0
                 && item.y >= area_left_top.1
                 && item.y <= area_right_bottom.1
                 && item.page_index == footer_item.page_index
         })
         .collect();
-
     // 获取特定字段的值
     let get_field_value = |label_pattern: &regex::Regex| -> String {
         let label_item = area_items
